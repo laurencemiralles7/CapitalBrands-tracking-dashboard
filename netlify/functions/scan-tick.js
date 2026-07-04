@@ -1,11 +1,16 @@
 import { connectLambda } from '@netlify/blobs'
 import { fetchFulfilledOrders, buildShopifyOrderLink } from './lib/shopify.js'
 import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
-import { getScanState, setScanState } from './lib/store.js'
+import { getScanState, setScanState, resetScanState } from './lib/store.js'
 import { BATCH_SIZE, SCAN_START_DATE, buildStuckEntry, isTrackable } from './lib/stuckDetection.js'
 
 export async function handler(event) {
   connectLambda(event)
+
+  if (event.queryStringParameters?.reset) {
+    await resetScanState()
+    return { statusCode: 200, body: 'reset ok' }
+  }
 
   const state = await getScanState()
 

@@ -27,3 +27,8 @@ export async function setScanState(state) {
   const store = scanStore()
   await store.setJSON(STATE_KEY, state)
 }
+
+export async function resetScanState() {
+  const store = scanStore()
+  await store.setJSON(STATE_KEY, DEFAULT_STATE)
+}
