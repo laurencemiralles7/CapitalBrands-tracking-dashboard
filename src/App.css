@@ -1,0 +1,256 @@
+.dashboard {
+  padding: 32px 24px 64px;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 4px;
+  font-size: 32px;
+}
+
+.subtitle {
+  color: var(--text);
+  margin-bottom: 24px;
+}
+
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-item {
+  flex: 1 1 200px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.summary-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.status-tab.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.status-tab-count {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.status-tab.active .status-tab-count {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.sub-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sub-filter-tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sub-filter-tab.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.page-size-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-size-select select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.pagination button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.error-banner,
+.loading-banner,
+.empty-banner {
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.error-banner {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: rgba(185, 28, 28, 0.06);
+}
+
+.parcels-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.parcels-table th,
+.parcels-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.parcels-table th.days-no-update-cell,
+.parcels-table td.days-no-update-cell {
+  text-align: center;
+}
+
+.parcels-table td.products-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.parcels-table th {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.parcels-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.no-update-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+  white-space: nowrap;
+}
+
+.status-badge.status-info_received {
+  background: rgba(234, 179, 8, 0.15);
+  color: #a16207;
+}
+
+.status-badge.status-in_transit {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.status-badge.status-out_for_delivery {
+  background: rgba(56, 189, 248, 0.15);
+  color: #0284c7;
+}
+
+.status-badge.status-ready_for_pickup {
+  background: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+}
+
+.status-badge.status-exception,
+.status-badge.status-failed_attempt {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
