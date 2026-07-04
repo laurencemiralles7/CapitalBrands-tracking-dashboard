@@ -9,11 +9,41 @@ export async function handler(event) {
 
   const state = await getScanState()
 
-  const { orders, nextPageInfo } = await fetchFulfilledOrders({
-    limit: BATCH_SIZE,
-    pageInfo: state.pageInfo ?? undefined,
-    createdAtMin: state.pageInfo ? undefined : SCAN_START_DATE,
-  })
+  let orders, nextPageInfo
+  try {
+    ;({ orders, nextPageInfo } = await fetchFulfilledOrders({
+      limit: BATCH_SIZE,
+      pageInfo: state.pageInfo ?? undefined,
+      createdAtMin: state.pageInfo ? undefined : SCAN_START_DATE,
+    }))
+  } catch (err) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        debug: true,
+        error: err.message,
+        hasShop: !!process.env.SHOPIFY_SHOP,
+        hasToken: !!process.env.SHOPIFY_ACCESS_TOKEN,
+        hasPPKey: !!process.env.PARCELPANEL_API_KEY,
+        priorState: state,
+      }),
+    }
+  }
+
+  if (event.queryStringParameters?.debug) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        debug: true,
+        ordersFetched: orders.length,
+        nextPageInfo,
+        priorPageInfo: state.pageInfo,
+        hasShop: !!process.env.SHOPIFY_SHOP,
+        hasToken: !!process.env.SHOPIFY_ACCESS_TOKEN,
+        hasPPKey: !!process.env.PARCELPANEL_API_KEY,
+      }),
+    }
+  }
 
   const newStuckEntries = []
 
