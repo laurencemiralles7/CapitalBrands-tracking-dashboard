@@ -10,9 +10,17 @@ export async function fetchTrackingForOrder(orderNumber) {
 
   const url = `${PARCELPANEL_BASE_URL}/api/v2/tracking/order?order_number=${encodeURIComponent(orderNumber)}`
 
-  const response = await fetch(url, {
-    headers: { 'x-parcelpanel-api-key': apiKey },
-  })
+  let response
+  try {
+    response = await fetch(url, {
+      headers: { 'x-parcelpanel-api-key': apiKey },
+      signal: AbortSignal.timeout(15000),
+    })
+  } catch {
+    // Timed out or network error — treat like "no shipment data" so one
+    // unresponsive request doesn't hang the whole batch indefinitely.
+    return null
+  }
 
   if (!response.ok) {
     return null

@@ -32,6 +32,7 @@ export async function fetchFulfilledOrders({ limit = 25, createdAtMax, createdAt
 
   const response = await fetch(url, {
     headers: { 'X-Shopify-Access-Token': token },
+    signal: AbortSignal.timeout(15000),
   })
 
   if (!response.ok) {
