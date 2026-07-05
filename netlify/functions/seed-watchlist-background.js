@@ -27,37 +27,45 @@ export async function handler(event) {
   // before this batch finishes) doesn't start a second overlapping pass.
   await setScanState({ ...state, lockedAt: new Date().toISOString() })
 
-  const { orders, nextPageInfo } = await fetchFulfilledOrders({
-    limit: SEED_BATCH_SIZE,
-    pageInfo: state.seedPageInfo ?? undefined,
-    createdAtMin: state.seedPageInfo ? undefined : SCAN_START_DATE,
-  })
+  try {
+    const { orders, nextPageInfo } = await fetchFulfilledOrders({
+      limit: SEED_BATCH_SIZE,
+      pageInfo: state.seedPageInfo ?? undefined,
+      createdAtMin: state.seedPageInfo ? undefined : SCAN_START_DATE,
+    })
 
-  const watchlist = [...state.watchlist]
-  const seenIds = new Set(watchlist.map((order) => order.id))
+    const watchlist = [...state.watchlist]
+    const seenIds = new Set(watchlist.map((order) => order.id))
 
-  for (const order of orders) {
-    const tracking = await fetchTrackingForOrder(order.name)
-    await wait(PARCELPANEL_RATE_LIMIT_DELAY_MS)
+    for (const order of orders) {
+      const tracking = await fetchTrackingForOrder(order.name)
+      await wait(PARCELPANEL_RATE_LIMIT_DELAY_MS)
 
-    const shipments = tracking?.order?.shipments ?? []
-    const stillOpen = shipments.some((shipment) => isTrackable(shipment))
+      const shipments = tracking?.order?.shipments ?? []
+      const stillOpen = shipments.some((shipment) => isTrackable(shipment))
 
-    if (stillOpen && !seenIds.has(order.id)) {
-      watchlist.push(order)
-      seenIds.add(order.id)
+      if (stillOpen && !seenIds.has(order.id)) {
+        watchlist.push(order)
+        seenIds.add(order.id)
+      }
     }
+
+    await setScanState({
+      ...state,
+      status: nextPageInfo ? 'scanning' : 'idle',
+      seedPageInfo: nextPageInfo,
+      seedComplete: !nextPageInfo,
+      ordersScannedThisPass: state.ordersScannedThisPass + orders.length,
+      watchlist,
+      lockedAt: null,
+      lastError: null,
+    })
+
+    return { statusCode: 200, body: 'ok' }
+  } catch (err) {
+    // Temporary diagnostic: persist the failure reason instead of leaving the
+    // lock stuck for 10 min with no visibility into what went wrong.
+    await setScanState({ ...state, lockedAt: null, lastError: `${err.message}\n${err.stack ?? ''}` })
+    return { statusCode: 200, body: 'error captured' }
   }
-
-  await setScanState({
-    ...state,
-    status: nextPageInfo ? 'scanning' : 'idle',
-    seedPageInfo: nextPageInfo,
-    seedComplete: !nextPageInfo,
-    ordersScannedThisPass: state.ordersScannedThisPass + orders.length,
-    watchlist,
-    lockedAt: null,
-  })
-
-  return { statusCode: 200, body: 'ok' }
 }
