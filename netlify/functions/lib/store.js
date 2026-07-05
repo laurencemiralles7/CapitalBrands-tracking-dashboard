@@ -29,7 +29,9 @@ function scanStore() {
 export async function getScanState() {
   const store = scanStore()
   const state = await store.get(STATE_KEY, { type: 'json' })
-  return state ?? DEFAULT_STATE
+  // Merge with defaults so state persisted under an older schema (e.g. before
+  // a field was renamed/added) doesn't leave new fields undefined and crash callers.
+  return state ? { ...DEFAULT_STATE, ...state } : DEFAULT_STATE
 }
 
 export async function setScanState(state) {
