@@ -3,6 +3,8 @@ import { getStore } from '@netlify/blobs'
 const STORE_NAME = 'parcelpanel-scan'
 const STATE_KEY = 'scan-state'
 
+export const LOCK_TIMEOUT_MS = 10 * 60 * 1000 // self-heals if a run crashes without releasing the lock
+
 const DEFAULT_STATE = {
   status: 'idle', // 'scanning' while the one-time history backfill is seeding the watchlist
   seedComplete: false,
@@ -12,6 +14,12 @@ const DEFAULT_STATE = {
   results: [],
   lastCompletedAt: null,
   lastCompletedOrdersScanned: 0, // watchlist size processed in the last completed tick
+  lockedAt: null, // ISO timestamp while a background tick is running; prevents overlapping ticks
+}
+
+export function isLocked(state) {
+  if (!state.lockedAt) return false
+  return Date.now() - new Date(state.lockedAt).getTime() < LOCK_TIMEOUT_MS
 }
 
 function scanStore() {

@@ -1,7 +1,7 @@
 import { connectLambda } from '@netlify/blobs'
 import { fetchFulfilledOrders } from './lib/shopify.js'
 import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
-import { getScanState, setScanState } from './lib/store.js'
+import { getScanState, setScanState, isLocked } from './lib/store.js'
 import { SCAN_START_DATE, isTrackable } from './lib/stuckDetection.js'
 
 // One-time history backfill: pages through every fulfilled order since
@@ -18,6 +18,14 @@ export async function handler(event) {
   if (state.seedComplete) {
     return { statusCode: 200, body: 'seed already complete' }
   }
+
+  if (isLocked(state)) {
+    return { statusCode: 200, body: 'previous seed tick still running, skipping' }
+  }
+
+  // Claim the lock immediately so the next scheduled trigger (which can fire
+  // before this batch finishes) doesn't start a second overlapping pass.
+  await setScanState({ ...state, lockedAt: new Date().toISOString() })
 
   const { orders, nextPageInfo } = await fetchFulfilledOrders({
     limit: SEED_BATCH_SIZE,
@@ -48,6 +56,7 @@ export async function handler(event) {
     seedComplete: !nextPageInfo,
     ordersScannedThisPass: state.ordersScannedThisPass + orders.length,
     watchlist,
+    lockedAt: null,
   })
 
   return { statusCode: 200, body: 'ok' }

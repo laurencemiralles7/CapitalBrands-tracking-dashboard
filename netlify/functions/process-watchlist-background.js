@@ -1,7 +1,7 @@
 import { connectLambda } from '@netlify/blobs'
 import { buildShopifyOrderLink } from './lib/shopify.js'
 import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
-import { getScanState, setScanState } from './lib/store.js'
+import { getScanState, setScanState, isLocked } from './lib/store.js'
 import { buildStuckEntry, isTrackable } from './lib/stuckDetection.js'
 
 // Steady-state tick: only re-checks orders already on the watchlist (fulfilled,
@@ -11,6 +11,12 @@ export async function handler(event) {
   connectLambda(event)
 
   const state = await getScanState()
+
+  if (isLocked(state)) {
+    return { statusCode: 200, body: 'previous watchlist tick still running, skipping' }
+  }
+
+  await setScanState({ ...state, lockedAt: new Date().toISOString() })
 
   const remainingWatchlist = []
   const results = []
@@ -43,6 +49,7 @@ export async function handler(event) {
     results,
     lastCompletedAt: new Date().toISOString(),
     lastCompletedOrdersScanned: state.watchlist.length,
+    lockedAt: null,
   })
 
   return { statusCode: 200, body: 'ok' }
