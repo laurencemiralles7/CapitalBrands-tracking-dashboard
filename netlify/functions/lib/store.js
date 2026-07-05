@@ -4,13 +4,14 @@ const STORE_NAME = 'parcelpanel-scan'
 const STATE_KEY = 'scan-state'
 
 const DEFAULT_STATE = {
-  status: 'idle',
-  pageInfo: null,
-  accumulator: [],
-  ordersScannedThisPass: 0,
+  status: 'idle', // 'scanning' while the one-time history backfill is seeding the watchlist
+  seedComplete: false,
+  seedPageInfo: null,
+  ordersScannedThisPass: 0, // orders seeded so far (only meaningful while seeding)
+  watchlist: [], // fulfilled orders that are not yet delivered
   results: [],
   lastCompletedAt: null,
-  lastCompletedOrdersScanned: 0,
+  lastCompletedOrdersScanned: 0, // watchlist size processed in the last completed tick
 }
 
 function scanStore() {

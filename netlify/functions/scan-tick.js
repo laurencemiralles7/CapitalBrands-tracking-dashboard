@@ -1,61 +1,19 @@
 import { connectLambda } from '@netlify/blobs'
-import { fetchFulfilledOrders, buildShopifyOrderLink } from './lib/shopify.js'
-import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
-import { getScanState, setScanState } from './lib/store.js'
-import { BATCH_SIZE, SCAN_START_DATE, buildStuckEntry, isTrackable } from './lib/stuckDetection.js'
+import { getScanState } from './lib/store.js'
 
+const FALLBACK_BASE_URL = 'https://capitalbrands-tracking-dashboard.netlify.app'
+
+// Lightweight scheduled trigger (30s budget). It never does the actual
+// Shopify/ParcelPanel work itself — it just decides which background
+// function (15 min budget) should run next and fires it off.
 export async function handler(event) {
   connectLambda(event)
 
   const state = await getScanState()
+  const baseUrl = process.env.URL || FALLBACK_BASE_URL
+  const target = state.seedComplete ? 'process-watchlist-background' : 'seed-watchlist-background'
 
-  const { orders, nextPageInfo } = await fetchFulfilledOrders({
-    limit: BATCH_SIZE,
-    pageInfo: state.pageInfo ?? undefined,
-    createdAtMin: state.pageInfo ? undefined : SCAN_START_DATE,
-  })
+  await fetch(`${baseUrl}/.netlify/functions/${target}`)
 
-  const newStuckEntries = []
-
-  for (const order of orders) {
-    const tracking = await fetchTrackingForOrder(order.name)
-    await wait(PARCELPANEL_RATE_LIMIT_DELAY_MS)
-
-    const shipments = tracking?.order?.shipments ?? []
-
-    for (const shipment of shipments) {
-      if (isTrackable(shipment)) {
-        newStuckEntries.push(
-          buildStuckEntry(order, shipment, tracking?.order?.tracking_link, buildShopifyOrderLink(order.id)),
-        )
-      }
-    }
-  }
-
-  const accumulator = [...state.accumulator, ...newStuckEntries]
-  const ordersScannedThisPass = state.ordersScannedThisPass + orders.length
-
-  if (nextPageInfo) {
-    await setScanState({
-      ...state,
-      status: 'scanning',
-      pageInfo: nextPageInfo,
-      accumulator,
-      ordersScannedThisPass,
-    })
-  } else {
-    const results = [...accumulator].sort((a, b) => (b.daysNoUpdate ?? 0) - (a.daysNoUpdate ?? 0))
-
-    await setScanState({
-      status: 'idle',
-      pageInfo: null,
-      accumulator: [],
-      ordersScannedThisPass: 0,
-      results,
-      lastCompletedAt: new Date().toISOString(),
-      lastCompletedOrdersScanned: ordersScannedThisPass,
-    })
-  }
-
-  return { statusCode: 200, body: 'ok' }
+  return { statusCode: 200, body: `triggered ${target}` }
 }

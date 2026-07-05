@@ -1,5 +1,4 @@
 export const MS_PER_DAY = 1000 * 60 * 60 * 24
-export const BATCH_SIZE = 18
 export const STORE_NAME = 'Cozey Maison'
 export const SCAN_START_DATE = '2026-05-15T00:00:00Z'
 
