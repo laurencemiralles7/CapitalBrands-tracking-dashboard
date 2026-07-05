@@ -8,7 +8,7 @@ import { SCAN_START_DATE, isTrackable } from './lib/stuckDetection.js'
 // SCAN_START_DATE and seeds the watchlist with any that aren't delivered yet.
 // Runs as a background function (15 min budget), so this batch can be much
 // larger than the old 30s-synchronous scan-tick ever allowed.
-const SEED_BATCH_SIZE = 500 // 500 * 550ms rate-limit delay ≈ 4.6 min, safe margin under 15 min
+const SEED_BATCH_SIZE = 250 // Shopify's REST API hard caps `limit` at 250; ≈2.3 min at the ParcelPanel rate limit, safe margin under 15 min
 
 export async function handler(event) {
   connectLambda(event)
