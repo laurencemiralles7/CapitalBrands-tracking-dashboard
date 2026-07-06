@@ -12,6 +12,9 @@ const DEFAULT_STATE = {
   ordersScannedThisPass: 0, // orders seeded so far (only meaningful while seeding)
   watchlist: [], // fulfilled orders that are not yet delivered
   results: [],
+  processCursor: 0, // index into watchlist for the current in-progress steady-state pass
+  processingResults: [], // results accumulated so far in the current in-progress pass
+  processingRemainingWatchlist: [], // watchlist entries confirmed still open so far in the current pass
   lastCompletedAt: null,
   lastCompletedOrdersScanned: 0, // watchlist size processed in the last completed tick
   lockedAt: null, // ISO timestamp while a background tick is running; prevents overlapping ticks
