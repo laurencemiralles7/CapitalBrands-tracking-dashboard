@@ -11,6 +11,7 @@ export async function handler(event) {
   const safeState = Object.fromEntries(
     Object.entries(state).map(([key, value]) => (Array.isArray(value) ? [`${key}Len`, value.length] : [key, value]))
   )
+  safeState.totalBlobSizeBytes = JSON.stringify(state).length
 
   return {
     statusCode: 200,
