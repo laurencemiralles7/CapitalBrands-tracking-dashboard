@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { connectLambda } from '@netlify/blobs'
 import { getScanState, setScanState } from './lib/store.js'
+import { trimOrderForWatchlist } from './lib/stuckDetection.js'
 
 function verifyShopifyHmac(rawBody, hmacHeader, secret) {
   if (!rawBody || !hmacHeader || !secret) return false
@@ -39,7 +40,7 @@ export async function handler(event) {
   if (!alreadyTracked) {
     await setScanState({
       ...state,
-      watchlist: [...state.watchlist, order],
+      watchlist: [...state.watchlist, trimOrderForWatchlist(order)],
     })
   }
 

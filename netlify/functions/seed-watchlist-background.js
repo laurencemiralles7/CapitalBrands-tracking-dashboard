@@ -2,7 +2,7 @@ import { connectLambda } from '@netlify/blobs'
 import { fetchFulfilledOrders } from './lib/shopify.js'
 import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
 import { getScanState, setScanState, isLocked } from './lib/store.js'
-import { SCAN_START_DATE, isTrackable } from './lib/stuckDetection.js'
+import { SCAN_START_DATE, isTrackable, trimOrderForWatchlist } from './lib/stuckDetection.js'
 
 // One-time history backfill: pages through every fulfilled order since
 // SCAN_START_DATE and seeds the watchlist with any that aren't delivered yet.
@@ -45,7 +45,7 @@ export async function handler(event) {
       const stillOpen = shipments.some((shipment) => isTrackable(shipment))
 
       if (stillOpen && !seenIds.has(order.id)) {
-        watchlist.push(order)
+        watchlist.push(trimOrderForWatchlist(order))
         seenIds.add(order.id)
       }
     }

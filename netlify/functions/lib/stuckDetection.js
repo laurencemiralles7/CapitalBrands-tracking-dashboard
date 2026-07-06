@@ -43,3 +43,17 @@ export function buildStuckEntry(order, shipment, trackingLink, shopifyOrderLink)
 export function isTrackable(shipment) {
   return shipment.status !== 'DELIVERED'
 }
+
+// The watchlist is persisted in full on every tick, so it must only carry the
+// fields buildStuckEntry/buildShopifyOrderLink actually use — not the full
+// raw Shopify order (shipping_address, fulfillments, etc). Storing full
+// orders let the persisted blob balloon to 100+ MB with a few thousand
+// entries, which made every read/write slow enough to look like a hang.
+export function trimOrderForWatchlist(order) {
+  return {
+    id: order.id,
+    name: order.name,
+    customer: order.customer ? { first_name: order.customer.first_name, last_name: order.customer.last_name } : null,
+    line_items: (order.line_items ?? []).map((item) => ({ title: item.title, quantity: item.quantity })),
+  }
+}

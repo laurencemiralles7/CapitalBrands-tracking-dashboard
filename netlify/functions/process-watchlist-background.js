@@ -2,7 +2,7 @@ import { connectLambda } from '@netlify/blobs'
 import { buildShopifyOrderLink } from './lib/shopify.js'
 import { fetchTrackingForOrder, wait, PARCELPANEL_RATE_LIMIT_DELAY_MS } from './lib/parcelpanel.js'
 import { getScanState, setScanState, isLocked } from './lib/store.js'
-import { buildStuckEntry, isTrackable } from './lib/stuckDetection.js'
+import { buildStuckEntry, isTrackable, trimOrderForWatchlist } from './lib/stuckDetection.js'
 
 // Steady-state tick: only re-checks orders already on the watchlist (fulfilled,
 // not yet delivered). New fulfillments are added by the webhook, not here, so
@@ -35,7 +35,7 @@ export async function handler(event) {
       const openShipments = shipments.filter(isTrackable)
 
       if (openShipments.length > 0) {
-        remainingWatchlist.push(order)
+        remainingWatchlist.push(trimOrderForWatchlist(order))
 
         for (const shipment of openShipments) {
           results.push(
