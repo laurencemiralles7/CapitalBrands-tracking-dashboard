@@ -15,6 +15,11 @@ export async function handler(event) {
         lastCompletedAt: state.lastCompletedAt,
         lastCompletedOrdersScanned: state.lastCompletedOrdersScanned,
         ordersScannedThisPass: state.ordersScannedThisPass,
+        // Steady-state pass progress — lets the dashboard show real movement
+        // instead of looking frozen while the first full pass is still running
+        // (parcels/ordersScannedThisPass don't update until the pass completes).
+        processCursor: state.processCursor,
+        watchlistTotal: state.watchlist.length,
       }),
     }
   } catch (error) {
