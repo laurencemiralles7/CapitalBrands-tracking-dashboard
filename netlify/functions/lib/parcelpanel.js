@@ -14,7 +14,7 @@ export async function fetchTrackingForOrder(orderNumber) {
   try {
     response = await fetch(url, {
       headers: { 'x-parcelpanel-api-key': apiKey },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(5000),
     })
   } catch {
     // Timed out or network error — treat like "no shipment data" so one
