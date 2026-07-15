@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import ActiveParcelsTable from './components/ActiveParcelsTable'
+import HandledParcelsTable from './components/HandledParcelsTable'
+import SnoozedParcelsTable from './components/SnoozedParcelsTable'
+import { HANDLE_REASONS } from './constants/handleReasons'
+import { markHandled } from './api/markHandled'
+import { snoozeParcel } from './api/snoozeParcel'
+import { unsnoozeParcel } from './api/unsnoozeParcel'
+import { reopenHandled } from './api/reopenHandled'
+import { formatRelativeTime } from './utils/time'
+import { matchesTab } from './utils/status'
 
 const POLL_INTERVAL_MS = 30000
-const NO_UPDATE_DAYS_THRESHOLD = 5
-const NO_UPDATE_STATUS_KEYS = ['info_received', 'in_transit']
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_PAGE_SIZE = 25
+const DEFAULT_HANDLE_INPUT = { reason: HANDLE_REASONS[0].key, comment: '' }
 
 const STATUS_TABS = [
   { key: 'all', label: 'All' },
@@ -18,123 +27,99 @@ const STATUS_TABS = [
   { key: 'no_update', label: 'No Update' },
 ]
 
-function formatRelativeTime(isoString) {
-  if (!isoString) return 'Never'
-  const diffMs = Date.now() - new Date(isoString).getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return 'Just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  return `${Math.floor(diffHr / 24)}d ago`
-}
-
-function normalizeStatus(value) {
-  return (value ?? '').toString().toLowerCase().replace(/[\s-]+/g, '_')
-}
-
-function parcelStatusKeys(parcel) {
-  return [normalizeStatus(parcel.status), normalizeStatus(parcel.statusLabel)]
-}
-
-function isNoUpdateParcel(parcel) {
-  const keys = parcelStatusKeys(parcel)
-  const isTrackedStatus = NO_UPDATE_STATUS_KEYS.some((key) => keys.some((k) => k.includes(key)))
-  return isTrackedStatus && (parcel.daysNoUpdate ?? 0) >= NO_UPDATE_DAYS_THRESHOLD
-}
-
-function matchesTab(parcel, tabKey) {
-  if (tabKey === 'all') return true
-  if (tabKey === 'no_update') return isNoUpdateParcel(parcel)
-  const keys = parcelStatusKeys(parcel)
-  return keys.some((k) => k.includes(tabKey))
-}
-
-const STATUS_ICONS = {
-  ready_for_pickup: '‼️',
-  exception: '⚠️',
-  failed_attempt: '⚠️',
-  in_transit: '✈️',
-  info_received: 'ℹ️',
-}
-
-function statusIcon(status) {
-  const key = normalizeStatus(status)
-  const match = Object.keys(STATUS_ICONS).find((k) => key.includes(k))
-  return match ? STATUS_ICONS[match] : null
-}
-
-function StatusBadge({ status }) {
-  const className = `status-badge status-${normalizeStatus(status) || 'unknown'}`
-  const icon = statusIcon(status)
-  return (
-    <span className={className}>
-      {icon ? `${icon} ` : ''}
-      {status ?? 'Unknown'}
-    </span>
-  )
-}
+const SUB_FILTER_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'info_received', label: 'Info Received' },
+  { key: 'in_transit', label: 'In Transit' },
+]
 
 function App() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [viewMode, setViewMode] = useState('active')
   const [activeTab, setActiveTab] = useState('all')
   const [sortDesc, setSortDesc] = useState(true)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [currentPage, setCurrentPage] = useState(1)
   const [noUpdateStatusFilter, setNoUpdateStatusFilter] = useState('all')
+  const [handleInputs, setHandleInputs] = useState({})
+  const [handleSubmitting, setHandleSubmitting] = useState({})
+  const [handleErrors, setHandleErrors] = useState({})
+  const [snoozeSubmitting, setSnoozeSubmitting] = useState({})
+  const [snoozeErrors, setSnoozeErrors] = useState({})
+  const [unsnoozeSubmitting, setUnsnoozeSubmitting] = useState({})
+  const [unsnoozeErrors, setUnsnoozeErrors] = useState({})
+  const [reopenSubmitting, setReopenSubmitting] = useState({})
+  const [reopenErrors, setReopenErrors] = useState({})
+
+  async function loadData() {
+    try {
+      const response = await fetch('/api/stuck-parcels')
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`)
+      const json = await response.json()
+      setData(json)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      try {
-        const response = await fetch('/api/stuck-parcels')
-        if (!response.ok) throw new Error(`Request failed: ${response.status}`)
-        const json = await response.json()
-        if (!cancelled) {
-          setData(json)
-          setError(null)
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      }
-    }
-
-    load()
-    const interval = setInterval(load, POLL_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
+    loadData()
+    const interval = setInterval(loadData, POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [])
 
   const parcels = data?.parcels ?? []
+  const activeParcels = useMemo(() => parcels.filter((p) => !p.handled && !p.snoozed), [parcels])
+  const snoozedParcels = useMemo(() => parcels.filter((p) => p.snoozed && !p.handled), [parcels])
+  const handledParcels = useMemo(() => parcels.filter((p) => p.handled), [parcels])
 
   const tabCounts = useMemo(() => {
     const counts = {}
     for (const tab of STATUS_TABS) {
-      counts[tab.key] = parcels.filter((p) => matchesTab(p, tab.key)).length
+      counts[tab.key] = activeParcels.filter((p) => matchesTab(p, tab.key)).length
     }
     return counts
-  }, [parcels])
+  }, [activeParcels])
 
-  const filteredParcels = useMemo(() => {
-    let result = parcels.filter((p) => matchesTab(p, activeTab))
+  const filteredActiveParcels = useMemo(() => {
+    let result = activeParcels.filter((p) => matchesTab(p, activeTab))
     if (activeTab === 'no_update' && noUpdateStatusFilter !== 'all') {
-      result = result.filter((p) => parcelStatusKeys(p).some((k) => k.includes(noUpdateStatusFilter)))
+      result = result.filter((p) => matchesTab(p, noUpdateStatusFilter))
     }
     return result
-  }, [parcels, activeTab, noUpdateStatusFilter])
+  }, [activeParcels, activeTab, noUpdateStatusFilter])
 
-  const sortedParcels = [...filteredParcels].sort((a, b) =>
-    sortDesc ? (b.daysNoUpdate ?? 0) - (a.daysNoUpdate ?? 0) : (a.daysNoUpdate ?? 0) - (b.daysNoUpdate ?? 0),
+  const sortedActiveParcels = useMemo(
+    () =>
+      [...filteredActiveParcels].sort((a, b) =>
+        sortDesc ? (b.daysNoUpdate ?? 0) - (a.daysNoUpdate ?? 0) : (a.daysNoUpdate ?? 0) - (b.daysNoUpdate ?? 0),
+      ),
+    [filteredActiveParcels, sortDesc],
   )
 
-  const totalPages = Math.max(1, Math.ceil(sortedParcels.length / pageSize))
+  const sortedHandledParcels = useMemo(
+    () => [...handledParcels].sort((a, b) => new Date(b.handled.handledAt) - new Date(a.handled.handledAt)),
+    [handledParcels],
+  )
+
+  const sortedSnoozedParcels = useMemo(
+    () => [...snoozedParcels].sort((a, b) => new Date(a.snoozed.snoozedUntil) - new Date(b.snoozed.snoozedUntil)),
+    [snoozedParcels],
+  )
+
+  const currentList =
+    viewMode === 'active' ? sortedActiveParcels : viewMode === 'snoozed' ? sortedSnoozedParcels : sortedHandledParcels
+  const totalPages = Math.max(1, Math.ceil(currentList.length / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const pageStart = (safeCurrentPage - 1) * pageSize
-  const paginatedParcels = sortedParcels.slice(pageStart, pageStart + pageSize)
+  const paginatedList = currentList.slice(pageStart, pageStart + pageSize)
+
+  function changeViewMode(mode) {
+    setViewMode(mode)
+    setCurrentPage(1)
+  }
 
   function changeTab(tabKey) {
     setActiveTab(tabKey)
@@ -150,6 +135,81 @@ function App() {
   function changePageSize(size) {
     setPageSize(size)
     setCurrentPage(1)
+  }
+
+  function getHandleInput(orderNumber) {
+    return handleInputs[orderNumber] ?? DEFAULT_HANDLE_INPUT
+  }
+
+  function updateHandleReason(orderNumber, reason) {
+    setHandleInputs((prev) => ({ ...prev, [orderNumber]: { ...getHandleInput(orderNumber), reason } }))
+  }
+
+  function updateHandleComment(orderNumber, comment) {
+    setHandleInputs((prev) => ({ ...prev, [orderNumber]: { ...getHandleInput(orderNumber), comment } }))
+  }
+
+  async function submitHandle(parcel) {
+    const input = getHandleInput(parcel.orderNumber)
+    setHandleSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: true }))
+    setHandleErrors((prev) => ({ ...prev, [parcel.orderNumber]: null }))
+
+    try {
+      await markHandled({
+        orderNumber: parcel.orderNumber,
+        reason: input.reason,
+        comment: input.comment,
+        status: parcel.status,
+        lastUpdateDate: parcel.lastUpdateDate,
+      })
+      await loadData()
+    } catch (err) {
+      setHandleErrors((prev) => ({ ...prev, [parcel.orderNumber]: err.message }))
+    } finally {
+      setHandleSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: false }))
+    }
+  }
+
+  async function submitSnooze(parcel, days, comment) {
+    setSnoozeSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: true }))
+    setSnoozeErrors((prev) => ({ ...prev, [parcel.orderNumber]: null }))
+
+    try {
+      await snoozeParcel({ orderNumber: parcel.orderNumber, days, comment })
+      await loadData()
+    } catch (err) {
+      setSnoozeErrors((prev) => ({ ...prev, [parcel.orderNumber]: err.message }))
+    } finally {
+      setSnoozeSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: false }))
+    }
+  }
+
+  async function submitUnsnooze(parcel) {
+    setUnsnoozeSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: true }))
+    setUnsnoozeErrors((prev) => ({ ...prev, [parcel.orderNumber]: null }))
+
+    try {
+      await unsnoozeParcel({ orderNumber: parcel.orderNumber })
+      await loadData()
+    } catch (err) {
+      setUnsnoozeErrors((prev) => ({ ...prev, [parcel.orderNumber]: err.message }))
+    } finally {
+      setUnsnoozeSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: false }))
+    }
+  }
+
+  async function submitReopen(parcel) {
+    setReopenSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: true }))
+    setReopenErrors((prev) => ({ ...prev, [parcel.orderNumber]: null }))
+
+    try {
+      await reopenHandled({ orderNumber: parcel.orderNumber })
+      await loadData()
+    } catch (err) {
+      setReopenErrors((prev) => ({ ...prev, [parcel.orderNumber]: err.message }))
+    } finally {
+      setReopenSubmitting((prev) => ({ ...prev, [parcel.orderNumber]: false }))
+    }
   }
 
   return (
@@ -175,31 +235,54 @@ function App() {
         <div className="summary-item">
           <span className="summary-label">Scan status</span>
           <span className="summary-value">
-            {data?.status === 'scanning' ? `Scanning… (${data.ordersScannedThisPass} checked)` : 'Idle'}
+            {data?.status === 'scanning'
+              ? `Scanning… (${data.ordersScannedThisPass} checked)`
+              : data?.watchlistTotal
+                ? `Idle (${data.processCursor}/${data.watchlistTotal} this pass)`
+                : 'Idle'}
           </span>
         </div>
       </div>
 
-      <div className="status-tabs">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            className={`status-tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => changeTab(tab.key)}
-          >
-            {tab.label}
-            <span className="status-tab-count">{data ? tabCounts[tab.key] : '—'}</span>
-          </button>
-        ))}
+      <div className="view-mode-toggle">
+        <button
+          className={`view-mode-tab ${viewMode === 'active' ? 'active' : ''}`}
+          onClick={() => changeViewMode('active')}
+        >
+          Active ({activeParcels.length})
+        </button>
+        <button
+          className={`view-mode-tab ${viewMode === 'snoozed' ? 'active' : ''}`}
+          onClick={() => changeViewMode('snoozed')}
+        >
+          Snoozed ({snoozedParcels.length})
+        </button>
+        <button
+          className={`view-mode-tab ${viewMode === 'handled' ? 'active' : ''}`}
+          onClick={() => changeViewMode('handled')}
+        >
+          Handled ({handledParcels.length})
+        </button>
       </div>
 
-      {activeTab === 'no_update' && (
+      {viewMode === 'active' && (
+        <div className="status-tabs">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`status-tab ${activeTab === tab.key ? 'active' : ''}`}
+              onClick={() => changeTab(tab.key)}
+            >
+              {tab.label}
+              <span className="status-tab-count">{data ? tabCounts[tab.key] : '—'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {viewMode === 'active' && activeTab === 'no_update' && (
         <div className="sub-filters">
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'info_received', label: 'Info Received' },
-            { key: 'in_transit', label: 'In Transit' },
-          ].map((option) => (
+          {SUB_FILTER_OPTIONS.map((option) => (
             <button
               key={option.key}
               className={`sub-filter-tab ${noUpdateStatusFilter === option.key ? 'active' : ''}`}
@@ -215,93 +298,78 @@ function App() {
 
       {!data && !error && <div className="loading-banner">Loading…</div>}
 
-      {data && filteredParcels.length === 0 && (
-        <div className="empty-banner">No parcels found for this filter.</div>
+      {data && currentList.length === 0 && (
+        <div className="empty-banner">
+          {viewMode === 'active'
+            ? 'No parcels found for this filter.'
+            : viewMode === 'snoozed'
+              ? 'No snoozed parcels.'
+              : 'No handled parcels yet.'}
+        </div>
       )}
 
-      {data && filteredParcels.length > 0 && (
+      {data && currentList.length > 0 && (
         <>
-        <div className="table-controls">
-          <span className="results-count">
-            Showing {pageStart + 1}–{Math.min(pageStart + pageSize, sortedParcels.length)} of {sortedParcels.length}
-          </span>
-          <label className="page-size-select">
-            Per page:
-            <select value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))}>
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <table className="parcels-table">
-          <thead>
-            <tr>
-              <th>Store</th>
-              <th>Order #</th>
-              <th
-                className="sortable days-no-update-cell"
-                onClick={() => setSortDesc((v) => !v)}
-              >
-                Days No Update {sortDesc ? '↓' : '↑'}
-              </th>
-              <th>Tracking Status</th>
-              <th>Product(s)</th>
-              <th>Customer Name</th>
-              <th>Tracking Link</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedParcels.map((p, i) => (
-              <tr key={`${p.orderNumber}-${i}`}>
-                <td>{p.storeName ?? '—'}</td>
-                <td>
-                  {p.shopifyOrderLink ? (
-                    <a href={p.shopifyOrderLink} target="_blank" rel="noreferrer">
-                      {p.orderNumber}
-                    </a>
-                  ) : (
-                    p.orderNumber
-                  )}
-                </td>
-                <td className="days-no-update-cell">
-                  {p.daysNoUpdate === null ? (
-                    '—'
-                  ) : isNoUpdateParcel(p) ? (
-                    <span className="no-update-flag">⚠️ {p.daysNoUpdate}d</span>
-                  ) : (
-                    `${p.daysNoUpdate}d`
-                  )}
-                </td>
-                <td><StatusBadge status={p.statusLabel ?? p.status} /></td>
-                <td className="products-cell" title={p.products ?? undefined}>{p.products ?? '—'}</td>
-                <td>{p.customerName ?? '—'}</td>
-                <td>
-                  {p.trackingLink ? (
-                    <a href={p.trackingLink} target="_blank" rel="noreferrer">
-                      Track
-                    </a>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="pagination">
-          <button disabled={safeCurrentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
-            Previous
-          </button>
-          <span className="pagination-status">
-            Page {safeCurrentPage} of {totalPages}
-          </span>
-          <button disabled={safeCurrentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
-            Next
-          </button>
-        </div>
+          <div className="table-controls">
+            <span className="results-count">
+              Showing {pageStart + 1}–{Math.min(pageStart + pageSize, currentList.length)} of {currentList.length}
+            </span>
+            <label className="page-size-select">
+              Per page:
+              <select value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))}>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="table-scroll">
+            {viewMode === 'active' ? (
+              <ActiveParcelsTable
+                paginatedParcels={paginatedList}
+                sortDesc={sortDesc}
+                onToggleSort={() => setSortDesc((v) => !v)}
+                getHandleInput={getHandleInput}
+                onReasonChange={updateHandleReason}
+                onCommentChange={updateHandleComment}
+                onSubmitHandle={submitHandle}
+                handleSubmitting={handleSubmitting}
+                handleErrors={handleErrors}
+                onSnooze={submitSnooze}
+                snoozeSubmitting={snoozeSubmitting}
+                snoozeErrors={snoozeErrors}
+              />
+            ) : viewMode === 'snoozed' ? (
+              <SnoozedParcelsTable
+                paginatedParcels={paginatedList}
+                onUnsnooze={submitUnsnooze}
+                unsnoozeSubmitting={unsnoozeSubmitting}
+                unsnoozeErrors={unsnoozeErrors}
+              />
+            ) : (
+              <HandledParcelsTable
+                paginatedParcels={paginatedList}
+                onReopen={submitReopen}
+                reopenSubmitting={reopenSubmitting}
+                reopenErrors={reopenErrors}
+              />
+            )}
+          </div>
+
+          <div className="pagination">
+            <button disabled={safeCurrentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
+              Previous
+            </button>
+            <span className="pagination-status">
+              Page {safeCurrentPage} of {totalPages}
+            </span>
+            <button disabled={safeCurrentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
+              Next
+            </button>
+          </div>
         </>
       )}
     </div>

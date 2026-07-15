@@ -3,6 +3,15 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Pin the local `netlify dev` proxy to Vite's fixed port (see vite.config.js).
+# Without this, `netlify dev` guesses Vite's default port (5173), which can
+# collide with another project's Vite server running locally at the same time
+# and silently proxy this dashboard's requests to the wrong app.
+[dev]
+  command = "npm run dev"
+  targetPort = 5184
+  framework = "#custom"
+
 [functions]
   node_bundler = "esbuild"
 
